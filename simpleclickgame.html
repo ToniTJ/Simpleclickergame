@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <title>Simplest Clicker Game</title>
+        <meta charset="utf-8" />
+        <style>
+         .gamebutton {
+			 font-size: 12px;
+			 position: absolute;
+			 background-color: red;
+			 color: white;
+         }
+		 
+		 #add_points:hover {
+			color: yellow;
+         }
+		 
+		 #buttons {
+             position: fixed;
+             top: 5px;
+             left: 100px;
+         }
+		 
+         #add_points {
+             top: 20%;
+             left: 10%;
+         }
+		 
+        </style>
+        <script src="http://code.jquery.com/jquery-1.11.1.min.js">
+		</script>
+        <script>
+
+         $(document).ready(function() {
+
+             var points = 0;
+			 var clicks = 1;
+			 var limit = 50;
+
+             var move = function(multiplier) {
+                 var top = parseFloat($("#add_points").css("top"));
+                 var left = parseFloat($("#add_points").css("left"));
+                 top = (Math.random() * 2 - 1) * multiplier;
+                 left = (Math.random() * 2 - 1) * multiplier;
+                 if (top < 100) {
+                     top += 150;
+                 }
+                 else if (top > window.innerHeight - 100) {
+                     top -= 150;
+                 }
+                 if (left < 100) {
+                     left += 150;
+                 }
+                 else if (left > window.innerWidth - 100) {
+                     left -= 150;
+                 }
+                 $("#add_points").css("top", top);
+                 $("#add_points").css("left", left);
+             }
+
+             var showScore = function() {
+                 $("#score").text(points);//+" "+clicks);
+             };
+			 
+			 var showMessage = function() {
+				 var penalty = clicks - points;
+				 var accuracy = 100 * (points / clicks)
+				 $("#message").text(points+" points acquired with "+penalty+" background click(s)."
+				 +" Accuracy: "+accuracy+"%")
+			 }
+			 
+			 $(document).click(function() {
+				clicks++;
+			 });
+			 
+             $("#submit_score").click(function() {
+                 var msg = {
+                     "messageType": "SCORE",
+                     "score": points,
+                 };
+				 //$("#message").text("Score submitted.")
+                 window.parent.postMessage(msg, "*");
+             });
+
+             $("#save").click(function() {
+                 var msg = {
+                     "messageType": "SAVE",
+                     "gameState": {
+						"score": points,
+                     }
+                 };
+				 //$("#message").text("Game saved.")
+                 window.parent.postMessage(msg, "*");
+             });
+
+            $("#load").click(function() {
+                var msg = {
+                    "messageType": "LOAD_REQUEST",
+                };
+                window.parent.postMessage(msg, "*");
+            });
+
+            window.addEventListener("message", function(evt) {
+                if (evt.data.messageType === "LOAD") {
+                    points = evt.data.gameState.score;
+                    showScore();
+                } else if (evt.data.messageType === "ERROR") {
+                    alert(evt.data.info);
+                }
+            });
+			
+            $("#add_points").click(function() {
+                points++;
+                showScore();
+				move(100);
+				if(points >= limit)
+				{
+					showMessage();
+				}
+            });
+        });
+    </script>
+</head>
+
+<body>
+    <button class="gamebutton" id="add_points">Click Me!</button>
+	
+    <div>Score: <span id="score">0</span></div>
+	<div><span id="message"> </span></div>
+
+    <div id="buttons">
+        <button id="submit_score">Submit score</button>
+        <button id="save">Save</button>
+        <button id="load">Load</button>
+    </div>
+	
+</body>
+
+</html>
