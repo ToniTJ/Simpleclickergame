@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <title>Clicker Game</title>
+        <meta charset="utf-8" />
+        <style>
+         .gamebutton {
+             width: 7em;
+             height: 7em;
+             position: fixed;
+         }
+
+         #add_points {
+             top: 25%;
+             left: 25%;
+         }
+
+         #add_upgrade {
+             top: 75%;
+             left: 75%;
+         }
+
+         #add_points:hover {
+             color: green;
+         }
+
+         #buttons {
+             position: fixed;
+             bottom: 0;
+             right: 0;
+         }
+        </style>
+        <script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>
+        <script>
+         /* global $, alert */
+
+         $(document).ready(function() {
+             "use strict";
+
+             // These variable track the state of this "game"
+             var clickvalue = 1;
+             var points = 0;
+
+             var move = function(multiplier) {
+                 var top = parseFloat($("#add_points").css("top"));
+                 var left = parseFloat($("#add_points").css("left"));
+                 top += (Math.random() * 2 - 1) * multiplier;
+                 left += (Math.random() * 2 - 1) * multiplier;
+                 if (top < 100) {
+                     top = 100;
+                 }
+                 if (top > window.innerHeight - 100) {
+                     top = window.innerHeight - 100;
+                 }
+                 if (left < 100) {
+                     left = 100;
+                 }
+                 if (left > window.innerWidth - 100) {
+                     left = window.innerWidth - 100;
+                 }
+                 $("#add_points").css("top", top);
+                 $("#add_points").css("left", left);
+             }
+             var upgradeCost = function() {
+                 return Math.exp(clickvalue - 1) - 1;
+             };
+
+             var showScore = function() {
+                 $("#clickval").text(Math.round(clickvalue * 10) / 10);
+                 $("#score").text(Math.round(points));
+                 $("#upgrade_cost").text(Math.round(upgradeCost() * 10) / 10);
+             };
+
+             // Simulates "game over" when a score would be sent
+             $("#submit_score").click(function() {
+                 var msg = {
+                     "messageType": "SCORE",
+                     "score": parseFloat($("#score").text())
+                 };
+                 window.parent.postMessage(msg, "*");
+             });
+
+             // Sends this game's state to the service.
+             // The format of the game state is decided
+             // by the game
+             $("#save").click(function() {
+                 var msg = {
+                     "messageType": "SAVE",
+                     "gameState": {
+                         "score": points,
+                         "clickvalue": clickvalue
+                     }
+                 };
+                 window.parent.postMessage(msg, "*");
+             });
+
+            // Sends a request to the service for a
+            // state to be sent, if there is one.
+            $("#load").click(function() {
+                var msg = {
+                    "messageType": "LOAD_REQUEST",
+                };
+                window.parent.postMessage(msg, "*");
+            });
+
+            // Listen incoming messages, if the messageType
+            // is LOAD then the game state will be loaded.
+            // Note that no checking is done, whether the
+            // gameState in the incoming message contains
+            // correct information.
+            //
+            // Also handles any errors that the service
+            // wants to send (displays them as an alert).
+            window.addEventListener("message", function(evt) {
+                if (evt.data.messageType === "LOAD") {
+                    points = evt.data.gameState.score;
+                    clickvalue = evt.data.gameState.clickvalue;
+                    showScore();
+                } else if (evt.data.messageType === "ERROR") {
+                    alert(evt.data.info);
+                }
+            });
+
+            // This is part of the mechanics of the "game"
+            // it does not relate to the messaging with the
+            // service.
+            //
+            // Adds an item to the players inventory
+            $("#add_upgrade").click(function() {
+                var cost = upgradeCost();
+                if (cost <= points) {
+                    $("#clickvalmultiple").text("s");
+                    clickvalue *= 1.1;
+                    points -= cost;
+                    showScore();
+                } else {
+                    $("#add_upgrade").css("color", "red");
+                    window.setTimeout(function() {
+                        $("#add_upgrade").css("color", "initial");
+                    }, 200);
+                    move(50);
+                }
+            });
+
+            $("#add_points").click(function() {
+                points += clickvalue;
+                showScore();
+            });
+
+            window.setInterval(function() {
+                move(1);
+            }, 100);
+
+
+            // Request the service to set the resolution of the
+            // iframe correspondingly
+            var message = {
+                messageType: "SETTING",
+                options: {
+                    "width": 700, //Integer
+                    "height": 300 //Integer
+                }
+            };
+            window.parent.postMessage(message, "*");
+
+        });
+    </script>
+</head>
+
+<body>
+
+    <button class="gamebutton" id="add_upgrade">Add upgrade<br>Cost: <span id="upgrade_cost">0</span></button>
+    <button class="gamebutton" id="add_points">Click Me!</button>
+
+    <div><span id="clickval">1</span> Point<span id="clickvalmultiple"></span> per click</div>
+    <div><span id="score">0</span> Points</div>
+
+    <div id="buttons">
+        <button id="submit_score">Submit score</button><br>
+
+        <button id="save">Save</button>
+        <button id="load">Load</button>
+    </div>
+</body>
+
+</html>
