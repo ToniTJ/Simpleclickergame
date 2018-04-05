@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Game</title>
+<style>
+    html, body{
+        margin: 0;
+    }
+    canvas{
+        border: 1px solid black;
+    }
+    div.buttons{
+        clear: both;
+        position: absolute;
+        left: 0;
+        top: 0;
+        right: 0;
+        margin: 5px;
+    }
+</style>
+<script>
+
+    var canvas;
+    var ctx;
+
+    var isRunning = false;
+    var timerId = null;
+    var lastUpdate;
+    var gamestate;
+
+    // Initialization
+    window.addEventListener('load', function () {
+        canvas = document.getElementById('thecanvas');
+        ctx = canvas.getContext("2d");
+
+        var message =  {
+            messageType: "SETTING",
+            options: {
+                "width": 500, //Integer
+                "height": 500 //Integer
+            }
+        };
+        window.parent.postMessage(message, "*");
+    });
+    
+    // Message handler
+    window.addEventListener("message", function(evt) {
+        if (evt.data.messageType === "LOAD") {
+            gamestate = evt.data.gameState;
+            resume();
+        } else if (evt.data.messageType === "ERROR") {
+           alert(evt.data.info);
+        }
+    });
+
+    // Saving 
+    function save() {
+        var msg = {
+            "messageType": "SAVE",
+            "gameState": gamestate
+        };
+        window.parent.postMessage(msg, "*");
+    }
+
+    // Loading
+    function load() {
+        var msg = {
+            "messageType": "LOAD_REQUEST"
+        };
+        window.parent.postMessage(msg, "*");
+    }
+
+    // Score submitting
+    function submitScore() {
+        var msg = {
+            "messageType": "SCORE",
+            "score": gamestate.score
+        };
+        window.parent.postMessage(msg, "*");
+    }
+
+    // Starting
+    function start() {
+        lastUpdate = Date.now();
+
+        gamestate = {
+            timeUntilEnd: 30,
+            timeUntilNextMeteor: 0,
+            nextMeteorDelta: 10000,
+            score: 0,
+            meteors: []
+        };
+
+        showButtons('started');
+        isRunning = true;
+
+        if (timerId === null) {
+            timerId = window.setTimeout(tick, 0);
+        }
+    }
+
+    // Resume game after loaded
+    function resume() {
+        showButtons('started');
+
+        if (timerId === null) {
+            timerId = window.setTimeout(tick, 0);
+        }
+    }
+
+    // Called when time runs out
+    function end() {
+        console.log('Game ended');
+        gamestate.timeUntilEnd = 0;
+        isRunning = false;
+        showButtons('ended');
+    }
+
+    // Called for every frame
+    function tick() {
+        var now = Date.now();
+        var dt = (now - lastUpdate) / 1000.0; // Delta time in milliseconds
+        lastUpdate = now;
+
+        update(dt);
+        redraw();
+
+        if (isRunning) {
+            timerId = window.setTimeout(tick, 0);
+        } else{
+            timerId = null;
+        }
+    }
+
+    function spawnMeteor() {
+        gamestate.meteors.push({
+                x: canvas.width * Math.random(),
+                y: canvas.height * Math.random(),
+                vx: 10 + Math.random() * 100,
+                vy: 10 + Math.random() * 100,
+                radius: 10,
+                color: 'green',
+                isDead: false
+            });
+    }
+
+    function update(dt) {
+
+        gamestate.timeUntilEnd -= dt;
+
+        if (gamestate.timeUntilEnd < 0)
+        {
+            end();
+            return;
+        }
+
+        gamestate.timeUntilNextMeteor -= dt;
+        if (gamestate.timeUntilNextMeteor < 0) {
+            spawnMeteor();
+            gamestate.timeUntilNextMeteor = gamestate.nextMeteorDelta;
+            gamestate.nextMeteorDelta = gamestate.nextMeteorDelta * 0.80;
+        }
+
+        for (var i = 0; i < gamestate.meteors.length; i++) {
+            var meteor = gamestate.meteors[i];
+
+            meteor.x += meteor.vx * dt;
+            meteor.y += meteor.vy * dt;
+
+            if (meteor.isDead) {
+                meteor.radius -= dt * 10;
+
+                if (meteor.radius <= 0) {
+                    // Remove dead meteor
+                    gamestate.meteors.splice(i--, 1);
+                }
+            }
+
+            if (meteor.x > canvas.width) {
+                meteor.x = 0;
+            } else if (meteor.x < 0) {
+                meteor.x = canvas.width;
+            }
+
+            if (meteor.y > canvas.height) {
+                meteor.y = 0;
+            } else if (meteor.y < 0) {
+                meteor.y = canvas.height;
+            }
+        }
+    }
+
+    function redraw() {
+        // Clear the canvas
+        ctx.beginPath();
+        ctx.rect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#999';
+        ctx.fill();
+
+        ctx.font="15px";
+        ctx.fillStyle = '#000';
+        
+        if (!isRunning) {
+            ctx.fillText('Game over', 260, 20);
+            ctx.fillText('Final score: ' + gamestate.score, 360, 20);
+            return;
+        }
+
+        // Print status
+        ctx.fillText('Time: ' + gamestate.timeUntilEnd.toFixed(2), 260, 20);
+        ctx.fillText('Score: ' + gamestate.score, 360, 20);
+
+        for (var meteor of gamestate.meteors) {
+            ctx.beginPath();
+            ctx.arc(meteor.x, meteor.y, meteor.radius, 0, 2 * Math.PI, false);
+            ctx.fillStyle = meteor.color;
+            ctx.fill();
+        }
+    }
+
+    function onCanvasClicked(e)
+    {
+        if (!isRunning) return;
+
+        var x = e.offsetX;
+        var y = e.offsetY;
+
+        // Find matching meteor (That is alive)
+        for (var meteor of gamestate.meteors) {
+            if (Math.abs(meteor.x - x) < meteor.radius &&
+                Math.abs(meteor.y - y) < meteor.radius && 
+                !meteor.isDead) 
+            {
+                gamestate.score++;
+                meteor.isDead = true;
+                meteor.color = 'red';
+                spawnMeteor();
+                return;
+            }
+        }
+    }
+
+    function showButtons(state) {
+        if (state == 'notstarted') {
+            document.getElementById('buttons-notstarted').style.display = 'block';
+            document.getElementById('buttons-started').style.display = 'none';
+            document.getElementById('buttons-ended').style.display = 'none';
+        } else if (state == 'started') {
+            document.getElementById('buttons-notstarted').style.display = 'none';
+            document.getElementById('buttons-started').style.display = 'block';
+            document.getElementById('buttons-ended').style.display = 'none';
+        } else if (state == 'ended') {
+            document.getElementById('buttons-notstarted').style.display = 'none';
+            document.getElementById('buttons-started').style.display = 'none';
+            document.getElementById('buttons-ended').style.display = 'block';
+            document.getElementById('submitScoreButton').disabled = (gamestate.score <= 0);
+        }
+    }
+
+</script>
+</head>
+<body>
+    <canvas id="thecanvas" width="500" height="500" onmousedown="onCanvasClicked(event);"></canvas>
+    <div id="buttons-notstarted" class="buttons">
+        <button onclick="javascript: start();">New Game</button>
+        <button onclick="javascript: load();">Load</button>
+    </div>
+    <div id="buttons-started" class="buttons" style="display: none;">
+        <button onclick="javascript: save();">Save</button>
+        <button onclick="javascript: load();">Load</button>
+    </div>
+    <div id="buttons-ended" class="buttons">
+        <button onclick="javascript: start();">New Game</button>
+        <button onclick="javascript: load();">Load</button>
+        <button id="submitScoreButton" onclick="javascript: submitScore();">Submit score</button>
+    </div>
+</body>
+</html>
